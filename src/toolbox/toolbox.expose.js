@@ -69,8 +69,11 @@
 		
 		load: function(conf, els) {
 			
+			loaded = loaded || false;
+			exposed = exposed || [];
+			
 			// already loaded ?
-			if (loaded) { return this; }			
+			//if (loaded) { return this; }			
 			
 			// configuration
 			if (typeof conf == 'string') {
@@ -84,56 +87,58 @@
 
 			// get the mask
 			mask = $("#" + conf.maskId);
+			
+			if(!loaded){
+				// or create it
+				if (!mask.length) {
+					mask = $('<div/>').attr("id", conf.maskId);
+					$("body").append(mask);
+				}
 				
-			// or create it
-			if (!mask.length) {
-				mask = $('<div/>').attr("id", conf.maskId);
-				$("body").append(mask);
-			}
-			
-			// set position and dimensions 			
-			var size = viewport();
+				// set position and dimensions 			
+				var size = viewport();
+					
+				mask.css({				
+					position:'absolute', 
+					top: 0, 
+					left: 0,
+					width: size[0],
+					height: size[1],
+					display: 'none',
+					opacity: conf.startOpacity,					 		
+					zIndex: conf.zIndex 
+				});
 				
-			mask.css({				
-				position:'absolute', 
-				top: 0, 
-				left: 0,
-				width: size[0],
-				height: size[1],
-				display: 'none',
-				opacity: conf.startOpacity,					 		
-				zIndex: conf.zIndex 
-			});
-			
-			if (conf.color) {
-				mask.css("backgroundColor", conf.color);	
-			}			
-			
-			// onBeforeLoad
-			if (call(conf.onBeforeLoad) === false) {
-				return this;
+				if (conf.color) {
+					mask.css("backgroundColor", conf.color);	
+				}			
+				
+				// onBeforeLoad
+				if (call(conf.onBeforeLoad) === false) {
+					return this;
+				}
+				
+				// esc button
+				if (conf.closeOnEsc) {						
+					$(document).bind("keydown.mask", function(e) {							
+						if (e.keyCode == 27) {
+							$.mask.close(e);	
+						}		
+					});			
+				}
+				
+				// mask click closes
+				if (conf.closeOnClick) {
+					mask.bind("click.mask", function(e)  {
+						$.mask.close(e);		
+					});					
+				}			
+				
+				// resize mask when window is resized
+				$(window).bind("resize.mask", function() {
+					$.mask.fit();
+				});
 			}
-			
-			// esc button
-			if (conf.closeOnEsc) {						
-				$(document).bind("keydown.mask", function(e) {							
-					if (e.keyCode == 27) {
-						$.mask.close(e);	
-					}		
-				});			
-			}
-			
-			// mask click closes
-			if (conf.closeOnClick) {
-				mask.bind("click.mask", function(e)  {
-					$.mask.close(e);		
-				});					
-			}			
-			
-			// resize mask when window is resized
-			$(window).bind("resize.mask", function() {
-				$.mask.fit();
-			});
 			
 			// exposed elements
 			if (els && els.length) {
@@ -149,17 +154,37 @@
 				});
 			 
 				// make elements sit on top of the mask
-				exposed = els.css({ zIndex: Math.max(conf.zIndex + 1, overlayIndex == 'auto' ? 0 : overlayIndex)});			
+				exposed.push({
+					el:els.css({ zIndex: Math.max(conf.zIndex + 1, overlayIndex == 'auto' ? 0 : overlayIndex)})
+					, overlay: overlayIndex
+				});
 			}	
 			
-			// reveal mask
-			mask.css({display: 'block'}).fadeTo(conf.loadSpeed, conf.opacity, function() {
-				$.mask.fit(); 
-				call(conf.onLoad);
-			});
+			if(!loaded) {
+				// reveal mask
+				mask.css({display: 'block'}).fadeTo(conf.loadSpeed, conf.opacity, function() {
+					$.mask.fit(); 
+					call(conf.onLoad);
+				});
+				
+				loaded = true;			
+			}
 			
-			loaded = true;			
 			return this;				
+		},
+		
+		remove:function(els) {
+			var newexposed=[];
+			$(exposed).each(function(i, obj){
+				$(els).each(function(j, obj2){
+					if(obj.el[0]==obj2) {
+						obj.el.css({zIndex: obj.overlay});
+					} else {
+						newexposed.push(obj);
+					}
+				});
+			});
+			exposed=newexposed;
 		},
 		
 		close: function() {
@@ -171,7 +196,9 @@
 				mask.fadeOut(config.closeSpeed, function()  {					
 					call(config.onClose);					
 					if (exposed) {
-						exposed.css({zIndex: overlayIndex});
+						$(exposed).each(function(i, obj){
+							obj.el.css({zIndex: obj.overlay});
+						});
 					}				
 				});				
 				
